@@ -9,7 +9,11 @@ https://carlleoaddo-droid.github.io/brainz-calc/
 ## Features
 
 - Convert between 11 metric and imperial length units.
-- Calculate large-format print costs from dimensions: Flexy at GHS 2.50/sq ft and SAV at GHS 2.30/sq ft.
+- Calculate large-format print costs per square foot:
+  - Flexy: GHS 2.50
+  - SAV: GHS 2.30
+  - One way vision: GHS 7.00
+  - Transparent Sticker: GHS 4.00
 - Keep recent conversions and preferences in browser storage.
 - Work offline after the app has been loaded once.
 - Install as a PWA on supported browsers and devices.
