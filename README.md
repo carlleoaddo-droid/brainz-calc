@@ -4,8 +4,6 @@ A lightweight, offline-first progressive web app with an instant length converte
 
 ## Use the published app
 
-Once GitHub Pages deployment is enabled and completed, open:
-
 https://carlleoaddo-droid.github.io/brainz-calc/
 
 ## Features
@@ -22,4 +20,4 @@ Serve this directory from localhost (for example, with the VS Code Live Server e
 
 ## Publish
 
-The workflow in `.github/workflows/deploy-pages.yml` publishes the repository root to GitHub Pages. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions** once, then pushes to `main` deploy automatically.
+The workflow in `.github/workflows/deploy-pages.yml` publishes the repository root to GitHub Pages. In repository settings, **Pages → Build and deployment → Source** should be set to **GitHub Actions**. Every push to `main` deploys automatically.
