@@ -21,7 +21,9 @@
   const DEFAULT_SETTINGS = { theme: "light", precision: "auto", from: "m", to: "km" };
   const PRINT_RATE = {
     flexy: 2.5,
-    sav: 2.3
+    sav: 2.3,
+    "one-way-vision": 7,
+    "transparent-sticker": 4
   };
 
   const elements = {
