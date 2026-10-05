@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Brainz Calc",
+  "short_name": "Brainz Calc",
+  "description": "A fast, accurate length converter and print cost calculator that works offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#f5faf9",
+  "background_color": "#f5f9f8",
+  "icons": [
+    {
+      "src": "icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
