@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Brainz Calc",
-  "short_name": "Brainz Calc",
-  "description": "A fast, accurate length converter and print cost calculator that works offline.",
+  "name": "NexNum",
+  "short_name": "NexNum",
+  "description": "An offline length converter, calculator, and print cost calculator.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

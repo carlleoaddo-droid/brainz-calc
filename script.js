@@ -16,10 +16,12 @@
   ];
   const UNIT_BY_ID = new Map(UNITS.map((unit) => [unit.id, unit]));
   const HISTORY_KEY = "brainz-calc-history-v1";
+  const CALCULATOR_HISTORY_KEY = "brainz-calc-calculator-history-v1";
   const SETTINGS_KEY = "brainz-calc-settings-v1";
   const MAX_HISTORY = 50;
-  const DEFAULT_SETTINGS = { theme: "light", precision: "auto", from: "m", to: "km" };
-  const PRINT_RATE = {
+  const MAX_CALCULATOR_HISTORY = 30;
+  const DEFAULT_SETTINGS = { theme: "light", precision: "auto", from: "m", to: "km", name: "", photo: "" };
+  const DEFAULT_PRINT_RATES = {
     flexy: 2.5,
     sav: 2.3,
     "one-way-vision": 7,
@@ -39,31 +41,61 @@
     swap: document.querySelector("#swap-button"),
     theme: document.querySelector("#theme-select"),
     precision: document.querySelector("#precision-select"),
+    brandName: document.querySelector("#brand-name"),
+    profileName: document.querySelector("#profile-name"),
+    profilePhoto: document.querySelector("#profile-photo"),
+    profilePhotoDisplay: document.querySelector("#profile-photo-display"),
+    brandMarkIcon: document.querySelector("#brand-mark-icon"),
+    removeProfilePhoto: document.querySelector("#remove-profile-photo"),
+    rates: document.querySelectorAll(".material-rate"),
+    rateFeedback: document.querySelector("#rate-feedback"),
     defaultFrom: document.querySelector("#default-from"),
     defaultTo: document.querySelector("#default-to"),
     historyList: document.querySelector("#history-list"),
     historyEmpty: document.querySelector("#history-empty"),
     historyCount: document.querySelector("#history-count"),
     toast: document.querySelector("#toast"),
-    connection: document.querySelector("#connection-status"),
-    connectionLabel: document.querySelector("#connection-label"),
+    calculatorKeypad: document.querySelector("#calculator-keypad"),
+    calculatorResult: document.querySelector("#calculator-result"),
+    calculatorExpression: document.querySelector("#calculator-expression"),
+    calculatorHistoryList: document.querySelector("#calculator-history-list"),
+    calculatorHistoryEmpty: document.querySelector("#calculator-history-empty"),
+    calculatorHistoryCount: document.querySelector("#calculator-history-count"),
     printWidth: document.querySelector("#print-width"),
     printHeight: document.querySelector("#print-height"),
+    printQuantity: document.querySelector("#print-quantity"),
     printUnit: document.querySelector("#print-unit"),
     printMaterial: document.querySelector("#print-material"),
     printCost: document.querySelector("#print-cost"),
     printDetail: document.querySelector("#print-detail"),
     printCopy: document.querySelector("#print-copy-button"),
     widthFeedback: document.querySelector("#width-feedback"),
-    heightFeedback: document.querySelector("#height-feedback")
+    heightFeedback: document.querySelector("#height-feedback"),
+    quantityFeedback: document.querySelector("#quantity-feedback")
   };
 
   let settings = readSettings();
   let history = readHistory();
+  let calculatorHistory = readCalculatorHistory();
   let currentResult = null;
   let printCostValue = null;
+  let calculatorInput = "0";
+  let calculatorValue = 0;
+  let calculatorStoredValue = null;
+  let calculatorOperator = null;
+  let calculatorAwaitingInput = false;
+  let calculatorLastOperator = null;
+  let calculatorLastOperand = null;
+  let calculatorError = false;
   let toastTimeout;
   let lastToast = "";
+
+  const CALCULATOR_OPERATORS = {
+    add: { symbol: "+", calculate: (left, right) => left + right },
+    subtract: { symbol: "−", calculate: (left, right) => left - right },
+    multiply: { symbol: "×", calculate: (left, right) => left * right },
+    divide: { symbol: "÷", calculate: (left, right) => left / right }
+  };
 
   function readStorage(key, fallback) {
     try {
@@ -88,12 +120,22 @@
   }
 
   function readSettings() {
-    const saved = readStorage(SETTINGS_KEY, {});
+    const stored = readStorage(SETTINGS_KEY, {});
+    const saved = stored && typeof stored === "object" ? stored : {};
+    const savedRates = saved.rates && typeof saved.rates === "object" ? saved.rates : {};
     return {
       theme: saved.theme === "dark" ? "dark" : "light",
       precision: ["auto", "2", "4", "6"].includes(saved.precision) ? saved.precision : DEFAULT_SETTINGS.precision,
       from: UNIT_BY_ID.has(saved.from) ? saved.from : DEFAULT_SETTINGS.from,
-      to: UNIT_BY_ID.has(saved.to) ? saved.to : DEFAULT_SETTINGS.to
+      to: UNIT_BY_ID.has(saved.to) ? saved.to : DEFAULT_SETTINGS.to,
+      name: typeof saved.name === "string" ? saved.name.trim().slice(0, 40) : DEFAULT_SETTINGS.name,
+      photo: typeof saved.photo === "string" && /^data:image\/jpeg;base64,/.test(saved.photo) && saved.photo.length <= 200000
+        ? saved.photo
+        : DEFAULT_SETTINGS.photo,
+      rates: Object.fromEntries(Object.keys(DEFAULT_PRINT_RATES).map((material) => {
+        const rate = savedRates[material];
+        return [material, typeof rate === "number" && Number.isFinite(rate) && rate >= 0 ? rate : DEFAULT_PRINT_RATES[material]];
+      }))
     };
   }
 
@@ -109,12 +151,238 @@
     ).slice(0, MAX_HISTORY);
   }
 
+  function readCalculatorHistory() {
+    const saved = readStorage(CALCULATOR_HISTORY_KEY, []);
+    if (!Array.isArray(saved)) return [];
+    return saved.filter((item) =>
+      item &&
+      typeof item.expression === "string" &&
+      item.expression.length <= 120 &&
+      typeof item.result === "string" &&
+      item.result.length <= 80 &&
+      Number.isFinite(item.timestamp)
+    ).slice(0, MAX_CALCULATOR_HISTORY);
+  }
+
   function showToast(message) {
     clearTimeout(toastTimeout);
     elements.toast.textContent = message;
     elements.toast.classList.add("is-visible");
     toastTimeout = window.setTimeout(() => elements.toast.classList.remove("is-visible"), 2600);
     lastToast = message;
+  }
+
+  function formatCalculatorValue(value) {
+    return new Intl.NumberFormat(undefined, { maximumSignificantDigits: 12 }).format(value);
+  }
+
+  function renderCalculator() {
+    elements.calculatorResult.textContent = calculatorError
+      ? calculatorInput
+      : calculatorAwaitingInput ? formatCalculatorValue(calculatorValue) : calculatorInput;
+    elements.calculatorExpression.textContent = calculatorOperator && calculatorStoredValue !== null
+      ? `${formatCalculatorValue(calculatorStoredValue)} ${CALCULATOR_OPERATORS[calculatorOperator].symbol}`
+      : "";
+    elements.calculatorKeypad.querySelectorAll("[data-calc-operator]").forEach((button) => {
+      const active = button.dataset.calcOperator === calculatorOperator;
+      button.classList.toggle("is-selected", active);
+      if (active) button.setAttribute("aria-pressed", "true");
+      else button.removeAttribute("aria-pressed");
+    });
+  }
+
+  function resetCalculator() {
+    calculatorInput = "0";
+    calculatorValue = 0;
+    calculatorStoredValue = null;
+    calculatorOperator = null;
+    calculatorAwaitingInput = false;
+    calculatorLastOperator = null;
+    calculatorLastOperand = null;
+    calculatorError = false;
+    renderCalculator();
+  }
+
+  function enterCalculatorDigit(digit) {
+    if (calculatorError) resetCalculator();
+    if (calculatorAwaitingInput) {
+      calculatorInput = digit;
+      calculatorAwaitingInput = false;
+    } else if (calculatorInput.replace(/[-.]/g, "").length < 16) {
+      calculatorInput = calculatorInput === "0" ? digit : `${calculatorInput}${digit}`;
+    }
+    calculatorValue = Number(calculatorInput);
+    calculatorLastOperator = null;
+    calculatorLastOperand = null;
+    renderCalculator();
+  }
+
+  function enterCalculatorDecimal() {
+    if (calculatorError) resetCalculator();
+    if (calculatorAwaitingInput) {
+      calculatorInput = "0.";
+      calculatorAwaitingInput = false;
+    } else if (!calculatorInput.includes(".")) {
+      calculatorInput += ".";
+    }
+    calculatorValue = Number(calculatorInput);
+    calculatorLastOperator = null;
+    calculatorLastOperand = null;
+    renderCalculator();
+  }
+
+  function calculate(left, operator, right) {
+    if (operator === "divide" && right === 0) {
+      calculatorInput = "Cannot divide by zero";
+      calculatorError = true;
+      calculatorStoredValue = null;
+      calculatorOperator = null;
+      calculatorAwaitingInput = true;
+      renderCalculator();
+      return null;
+    }
+    const result = CALCULATOR_OPERATORS[operator].calculate(left, right);
+    if (!Number.isFinite(result)) {
+      calculatorInput = "Result out of range";
+      calculatorError = true;
+      calculatorStoredValue = null;
+      calculatorOperator = null;
+      calculatorAwaitingInput = true;
+      renderCalculator();
+      return null;
+    }
+    return result;
+  }
+
+  function chooseCalculatorOperator(operator) {
+    if (calculatorError) return;
+    if (calculatorOperator && !calculatorAwaitingInput && calculatorStoredValue !== null) {
+      const result = calculate(calculatorStoredValue, calculatorOperator, calculatorValue);
+      if (result === null) return;
+      calculatorValue = result;
+      calculatorInput = String(result);
+      calculatorStoredValue = result;
+    } else if (calculatorStoredValue === null || !calculatorOperator) {
+      calculatorStoredValue = calculatorValue;
+    }
+    calculatorOperator = operator;
+    calculatorAwaitingInput = true;
+    calculatorLastOperator = null;
+    calculatorLastOperand = null;
+    renderCalculator();
+  }
+
+  function evaluateCalculator() {
+    if (calculatorError) return;
+    if (calculatorOperator && calculatorStoredValue !== null) {
+      const operand = calculatorAwaitingInput ? calculatorStoredValue : calculatorValue;
+      const operator = calculatorOperator;
+      const left = calculatorStoredValue;
+      const result = calculate(calculatorStoredValue, operator, operand);
+      if (result === null) return;
+      addCalculatorHistory(left, operator, operand, result);
+      calculatorValue = result;
+      calculatorInput = String(result);
+      calculatorStoredValue = null;
+      calculatorOperator = null;
+      calculatorAwaitingInput = true;
+      calculatorLastOperator = operator;
+      calculatorLastOperand = operand;
+    } else if (calculatorLastOperator && calculatorLastOperand !== null) {
+      const left = calculatorValue;
+      const result = calculate(calculatorValue, calculatorLastOperator, calculatorLastOperand);
+      if (result === null) return;
+      addCalculatorHistory(left, calculatorLastOperator, calculatorLastOperand, result);
+      calculatorValue = result;
+      calculatorInput = String(result);
+      calculatorAwaitingInput = true;
+    }
+    renderCalculator();
+  }
+
+  function addCalculatorHistory(left, operator, right, result) {
+    const expression = `${formatCalculatorValue(left)} ${CALCULATOR_OPERATORS[operator].symbol} ${formatCalculatorValue(right)}`;
+    calculatorHistory = [{
+      expression,
+      result: formatCalculatorValue(result),
+      timestamp: Date.now()
+    }, ...calculatorHistory].slice(0, MAX_CALCULATOR_HISTORY);
+    writeStorage(CALCULATOR_HISTORY_KEY, calculatorHistory);
+    renderCalculatorHistory();
+  }
+
+  function renderCalculatorHistory() {
+    elements.calculatorHistoryList.replaceChildren();
+    elements.calculatorHistoryEmpty.hidden = calculatorHistory.length > 0;
+    elements.calculatorHistoryCount.textContent = calculatorHistory.length === 0
+      ? "No calculations yet"
+      : `${calculatorHistory.length} ${calculatorHistory.length === 1 ? "calculation" : "calculations"}`;
+
+    for (const item of calculatorHistory) {
+      const entry = document.createElement("li");
+      entry.className = "calculator-history-entry";
+
+      const summary = document.createElement("div");
+      summary.className = "calculator-history-summary";
+      const expression = document.createElement("span");
+      expression.className = "calculator-history-expression";
+      expression.textContent = item.expression;
+      const result = document.createElement("span");
+      result.className = "calculator-history-result";
+      result.textContent = `= ${item.result}`;
+      summary.append(expression, result);
+
+      const time = document.createElement("span");
+      time.className = "calculator-history-time";
+      time.textContent = new Date(item.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+      entry.append(summary, time);
+      elements.calculatorHistoryList.append(entry);
+    }
+  }
+
+  function clearCalculatorHistory() {
+    if (calculatorHistory.length === 0) {
+      showToast("Your calculator history is already empty.");
+      return;
+    }
+    calculatorHistory = [];
+    writeStorage(CALCULATOR_HISTORY_KEY, calculatorHistory);
+    renderCalculatorHistory();
+    showToast("Calculator history cleared.");
+  }
+
+  function applyCalculatorAction(action) {
+    if (action === "clear") {
+      resetCalculator();
+      return;
+    }
+    if (action === "equals") {
+      evaluateCalculator();
+      return;
+    }
+    if (calculatorError) return;
+    if (action === "decimal") {
+      enterCalculatorDecimal();
+    } else if (action === "sign") {
+      if (calculatorValue !== 0) {
+        calculatorValue *= -1;
+        calculatorInput = String(calculatorValue);
+        calculatorAwaitingInput = false;
+        renderCalculator();
+      }
+    } else if (action === "percent") {
+      calculatorValue /= 100;
+      calculatorInput = String(calculatorValue);
+      calculatorAwaitingInput = false;
+      calculatorLastOperator = null;
+      calculatorLastOperand = null;
+      renderCalculator();
+    } else if (action === "backspace" && !calculatorAwaitingInput) {
+      calculatorInput = calculatorInput.length > 1 ? calculatorInput.slice(0, -1) : "0";
+      if (calculatorInput === "-") calculatorInput = "0";
+      calculatorValue = Number(calculatorInput);
+      renderCalculator();
+    }
   }
 
   function addUnitOptions(select) {
@@ -130,6 +398,18 @@
     document.documentElement.dataset.theme = settings.theme;
     document.querySelector('meta[name="theme-color"]').content = settings.theme === "dark" ? "#101a1b" : "#f5faf9";
     elements.theme.value = settings.theme;
+  }
+
+  function applyProfile() {
+    const name = settings.name || "NexNum";
+    elements.brandName.textContent = name;
+    elements.profileName.value = settings.name;
+    document.querySelector("[data-home]").setAttribute("aria-label", `${name} home`);
+    const hasPhoto = Boolean(settings.photo);
+    elements.profilePhotoDisplay.hidden = !hasPhoto;
+    elements.profilePhotoDisplay.src = hasPhoto ? settings.photo : "";
+    elements.brandMarkIcon.hidden = hasPhoto;
+    elements.removeProfilePhoto.hidden = !hasPhoto;
   }
 
   function persistSettings() {
@@ -344,11 +624,13 @@
   function calculatePrintCost() {
     const widthText = elements.printWidth.value.trim();
     const heightText = elements.printHeight.value.trim();
+    const quantityText = elements.printQuantity.value.trim();
     const material = elements.printMaterial.value;
     const unit = elements.printUnit.value;
 
     elements.widthFeedback.textContent = "";
     elements.heightFeedback.textContent = "";
+    elements.quantityFeedback.textContent = "";
     elements.printCopy.disabled = true;
     printCostValue = null;
 
@@ -377,11 +659,17 @@
       return;
     }
 
+    const quantity = Number(quantityText);
+    if (!/^\d+$/.test(quantityText) || !Number.isSafeInteger(quantity) || quantity < 1) {
+      elements.quantityFeedback.textContent = "Enter a whole number greater than zero.";
+      return;
+    }
+
     const widthFt = Number(widthParsed.value) * getPrintUnitFactor(unit);
     const heightFt = Number(heightParsed.value) * getPrintUnitFactor(unit);
     const totalSquareFeet = widthFt * heightFt;
-    const rate = PRINT_RATE[material] ?? 2.5;
-    const cost = totalSquareFeet * rate;
+    const rate = settings.rates[material] ?? DEFAULT_PRINT_RATES[material];
+    const cost = totalSquareFeet * rate * quantity;
 
     printCostValue = cost;
     elements.printCost.textContent = new Intl.NumberFormat("en-GH", {
@@ -390,7 +678,7 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(cost);
-    elements.printDetail.textContent = `${formatValue(totalSquareFeet)} sq ft × GHS ${rate.toFixed(2)}/sq ft = ${new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)}`;
+    elements.printDetail.textContent = `${formatValue(totalSquareFeet)} sq ft × GHS ${rate.toFixed(2)}/sq ft × ${quantity} ${quantity === 1 ? "copy" : "copies"} = ${new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)}`;
     elements.printCopy.disabled = false;
   }
 
@@ -427,12 +715,6 @@
     }
   }
 
-  function updateConnectionStatus() {
-    const online = navigator.onLine;
-    elements.connection.classList.toggle("is-offline", !online);
-    elements.connectionLabel.textContent = online ? "Online" : "Offline";
-  }
-
   for (const select of [elements.from, elements.to, elements.defaultFrom, elements.defaultTo]) {
     addUnitOptions(select);
   }
@@ -442,9 +724,14 @@
   elements.defaultFrom.value = settings.from;
   elements.defaultTo.value = settings.to;
   elements.precision.value = settings.precision;
+  for (const input of elements.rates) {
+    input.value = String(settings.rates[input.dataset.material]);
+  }
   applyTheme();
+  applyProfile();
   renderHistory();
-  updateConnectionStatus();
+  renderCalculatorHistory();
+  renderCalculator();
   renderResult();
   calculatePrintCost();
 
@@ -455,6 +742,53 @@
   document.querySelector("[data-home]").addEventListener("click", (event) => {
     event.preventDefault();
     changeSection("converter");
+  });
+
+  elements.calculatorKeypad.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.calcDigit !== undefined) {
+      enterCalculatorDigit(button.dataset.calcDigit);
+    } else if (button.dataset.calcOperator) {
+      chooseCalculatorOperator(button.dataset.calcOperator);
+    } else if (button.dataset.calcAction) {
+      applyCalculatorAction(button.dataset.calcAction);
+    }
+  });
+  document.querySelector("[data-clear-calculator-history]").addEventListener("click", clearCalculatorHistory);
+  document.addEventListener("keydown", (event) => {
+    if (document.querySelector("#section-calculator").hidden) return;
+    if (/^\d$/.test(event.key)) {
+      event.preventDefault();
+      enterCalculatorDigit(event.key);
+    } else if (event.key === ".") {
+      event.preventDefault();
+      enterCalculatorDecimal();
+    } else if (event.key === "+") {
+      event.preventDefault();
+      chooseCalculatorOperator("add");
+    } else if (event.key === "-") {
+      event.preventDefault();
+      chooseCalculatorOperator("subtract");
+    } else if (event.key === "*") {
+      event.preventDefault();
+      chooseCalculatorOperator("multiply");
+    } else if (event.key === "/") {
+      event.preventDefault();
+      chooseCalculatorOperator("divide");
+    } else if (event.key === "Enter" || event.key === "=") {
+      event.preventDefault();
+      evaluateCalculator();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      resetCalculator();
+    } else if (event.key === "Backspace") {
+      event.preventDefault();
+      applyCalculatorAction("backspace");
+    } else if (event.key === "%") {
+      event.preventDefault();
+      applyCalculatorAction("percent");
+    }
   });
 
   elements.value.addEventListener("input", renderResult);
@@ -495,6 +829,63 @@
     settings.to = elements.defaultTo.value;
     persistSettings();
   });
+  elements.profileName.addEventListener("input", () => {
+    settings.name = elements.profileName.value.trim().slice(0, 40);
+    elements.brandName.textContent = settings.name || "NexNum";
+    document.querySelector("[data-home]").setAttribute("aria-label", `${settings.name || "NexNum"} home`);
+    persistSettings();
+  });
+  elements.profilePhoto.addEventListener("change", async () => {
+    const file = elements.profilePhoto.files[0];
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 8 * 1024 * 1024) {
+      elements.profilePhoto.value = "";
+      showToast("Choose a PNG, JPEG, WebP, or GIF image under 8 MB.");
+      return;
+    }
+
+    const imageUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.src = imageUrl;
+    try {
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight));
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Image processing is unavailable.");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      settings.photo = canvas.toDataURL("image/jpeg", 0.82);
+      persistSettings();
+      applyProfile();
+    } catch (error) {
+      console.error("Unable to process profile photo.", error);
+      showToast("Could not load that photo. Try another image.");
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+      elements.profilePhoto.value = "";
+    }
+  });
+  elements.removeProfilePhoto.addEventListener("click", () => {
+    settings.photo = "";
+    persistSettings();
+    applyProfile();
+  });
+  elements.rates.forEach((input) => {
+    input.addEventListener("input", () => {
+      const material = input.dataset.material;
+      const rate = input.valueAsNumber;
+      if (!material || !input.value || !input.validity.valid || !Number.isFinite(rate) || rate < 0) {
+        elements.rateFeedback.textContent = "Enter a valid non-negative rate with up to two decimal places.";
+        return;
+      }
+      settings.rates[material] = rate;
+      elements.rateFeedback.textContent = "";
+      persistSettings();
+      calculatePrintCost();
+    });
+  });
 
   elements.historyList.addEventListener("click", (event) => {
     const item = event.target.closest(".history-item");
@@ -512,12 +903,10 @@
 
   elements.printWidth.addEventListener("input", calculatePrintCost);
   elements.printHeight.addEventListener("input", calculatePrintCost);
+  elements.printQuantity.addEventListener("input", calculatePrintCost);
   elements.printUnit.addEventListener("change", calculatePrintCost);
   elements.printMaterial.addEventListener("change", calculatePrintCost);
   elements.printCopy.addEventListener("click", copyPrintCost);
-
-  window.addEventListener("online", updateConnectionStatus);
-  window.addEventListener("offline", updateConnectionStatus);
 
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
     window.addEventListener("load", () => {

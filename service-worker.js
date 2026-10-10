@@ -1,4 +1,4 @@
-const CACHE_NAME = "brainz-calc-v3";
+const CACHE_NAME = "brainz-calc-v5";
 const APP_SHELL = [
   "./",
   "./index.html",

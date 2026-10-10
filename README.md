@@ -1,27 +1,31 @@
-# Brainz Calc
+# NexNum
 
-A lightweight, offline-first progressive web app with an instant length converter and a large-format print cost calculator.
-
-## Use the published app
-
-https://carlleoaddo-droid.github.io/brainz-calc/
+NexNum is an offline-first progressive web app with a length converter, a basic
+calculator, and a large-format print cost calculator.
 
 ## Features
 
 - Convert between 11 metric and imperial length units.
-- Calculate large-format print costs per square foot:
-  - Flexy: GHS 2.50
-  - SAV: GHS 2.30
-  - One way vision: GHS 7.00
-  - Transparent Sticker: GHS 4.00
-- Keep recent conversions and preferences in browser storage.
-- Work offline after the app has been loaded once.
-- Install as a PWA on supported browsers and devices.
+- Keep recent conversions in browser storage.
+- Use a calculator with persistent calculator history.
+- Estimate print costs by dimensions, material, and quantity.
+- Customize material rates, display name, and profile photo in Settings.
+- Choose a theme, decimal precision, and default conversion units.
+- Work offline after the app has loaded once, and install it as a PWA.
+
+Settings, profile information, and histories are stored locally in the browser.
 
 ## Run locally
 
-Serve this directory from localhost (for example, with the VS Code Live Server extension). Service workers require localhost or HTTPS; opening `index.html` directly with `file://` does not enable offline caching.
+Serve this directory from localhost (for example, with the VS Code Live Server
+extension). Service workers require localhost or HTTPS; opening `index.html`
+directly with `file://` does not enable offline caching.
 
 ## Publish
 
-The workflow in `.github/workflows/deploy-pages.yml` publishes the repository root to GitHub Pages. In repository settings, **Pages → Build and deployment → Source** should be set to **GitHub Actions**. Every push to `main` deploys automatically.
+The workflow in `.github/workflows/deploy-pages.yml` publishes the repository
+root to GitHub Pages. In repository settings, choose **Pages → Build and
+deployment → Source → GitHub Actions**. Every push to `main` deploys
+automatically.
+
+Published app: https://carlleoaddo-droid.github.io/brainz-calc/
