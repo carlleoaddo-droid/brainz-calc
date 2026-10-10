@@ -34,7 +34,12 @@
 
 * { box-sizing: border-box; }
 
-html { min-width: 320px; min-height: 100%; background: var(--page); }
+html { min-width: 320px; min-height: 100%; background: var(--page); scrollbar-color: transparent transparent; scrollbar-width: thin; }
+html.is-scrolling { scrollbar-color: var(--muted) transparent; }
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 8px; background: transparent; background-clip: content-box; }
+html.is-scrolling::-webkit-scrollbar-thumb { background-color: var(--muted); }
 
 body {
   min-width: 320px;
@@ -65,7 +70,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .brand-copy { display: grid; gap: 1px; }
 .brand-name { font-size: 15px; font-weight: 740; letter-spacing: -0.02em; }
 .brand-caption { color: var(--muted); font-size: 12px; }
-.primary-nav { display: flex; gap: 6px; padding-bottom: 23px; border-bottom: 1px solid var(--line); }
+.primary-nav { display: flex; justify-content: center; gap: 6px; padding-top: 16px; border-top: 1px solid var(--line); }
 .nav-link { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 0 15px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 640; transition: color 150ms ease, background-color 150ms ease, transform 150ms ease; }
 .nav-link svg { width: 19px; height: 19px; }
 .nav-link:hover { background: var(--surface-soft); color: var(--ink); }

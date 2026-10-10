@@ -89,6 +89,7 @@
   let calculatorError = false;
   let toastTimeout;
   let lastToast = "";
+  let scrollIdleTimeout;
 
   const CALCULATOR_OPERATORS = {
     add: { symbol: "+", calculate: (left, right) => left + right },
@@ -734,6 +735,14 @@
   renderCalculator();
   renderResult();
   calculatePrintCost();
+
+  window.addEventListener("scroll", () => {
+    document.documentElement.classList.add("is-scrolling");
+    window.clearTimeout(scrollIdleTimeout);
+    scrollIdleTimeout = window.setTimeout(() => {
+      document.documentElement.classList.remove("is-scrolling");
+    }, 700);
+  }, { passive: true });
 
   document.querySelectorAll(".nav-link[data-section]").forEach((button) => {
     button.addEventListener("click", () => changeSection(button.dataset.section));
